@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Text, View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import db from '../db';
@@ -20,6 +20,7 @@ export default function TodoListScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
   const [editError, setEditError] = useState('');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     fetchTodos();
@@ -104,42 +105,60 @@ export default function TodoListScreen() {
     );
   }
 
+  const filteredTodos = useMemo(() => {
+    if (!search.trim()) return todos;
+    const lower = search.trim().toLowerCase();
+    return todos.filter(todo => todo.title.toLowerCase().includes(lower));
+  }, [search, todos]);
+
+  const renderItem = useCallback(
+    ({ item }) => (
+      <View style={styles.itemRow}>
+        <TouchableOpacity
+          style={styles.item}
+          onPress={() => handleToggleDone(item.id, item.done)}
+          onLongPress={() => {
+            setEditId(item.id);
+            setEditTitle(item.title);
+            setEditModalVisible(true);
+            setEditError('');
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTodo(item.id)}>
+          <Text style={styles.deleteButtonText}>🗑️</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [handleToggleDone, handleDeleteTodo]
+  );
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <Text style={styles.header}>📝 Danh sách công việc</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm..."
+            value={search}
+            onChangeText={setSearch}
+            placeholderTextColor="#a0aec0"
+          />
           {loading ? (
             <Text style={styles.loading}>Đang tải...</Text>
-          ) : todos.length === 0 ? (
+          ) : filteredTodos.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📭</Text>
               <Text style={styles.empty}>Chưa có việc nào</Text>
             </View>
           ) : (
             <FlatList
-              data={todos}
+              data={filteredTodos}
               keyExtractor={item => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.itemRow}>
-                  <TouchableOpacity
-                    style={styles.item}
-                    onPress={() => handleToggleDone(item.id, item.done)}
-                    onLongPress={() => {
-                      setEditId(item.id);
-                      setEditTitle(item.title);
-                      setEditModalVisible(true);
-                      setEditError('');
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTodo(item.id)}>
-                    <Text style={styles.deleteButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              renderItem={renderItem}
             />
           )}
           <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
@@ -375,5 +394,15 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#a0aec0',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    color: '#222',
   },
 });
