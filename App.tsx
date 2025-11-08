@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { Text, View } from 'react-native';
 import { initDB, seedTodos } from './db';
+import TodoListScreen from './screens/TodoListScreen';
 
 export default function App() {
   useEffect(() => {
@@ -8,7 +8,6 @@ export default function App() {
       try {
         await initDB();
         await seedTodos();
-        console.log('Database initialized and seeded');
       } catch (err) {
         console.error('DB init/seed error', err);
       }
@@ -16,9 +15,5 @@ export default function App() {
     setupDB();
   }, []);
 
-  return (
-    <View>
-      <Text>Todo app</Text>
-    </View>
-  );
+  return <TodoListScreen />;
 }
