@@ -16,6 +16,10 @@ export default function TodoListScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [inputError, setInputError] = useState('');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     fetchTodos();
@@ -53,6 +57,23 @@ export default function TodoListScreen() {
     }
   }
 
+  async function handleEditTodo() {
+    if (!editTitle.trim()) {
+      setEditError('Tiêu đề không được để trống');
+      return;
+    }
+    setEditError('');
+    try {
+      await db.runAsync('UPDATE todos SET title = ? WHERE id = ?', [editTitle.trim(), editId]);
+      setEditModalVisible(false);
+      setEditTitle('');
+      setEditId(null);
+      fetchTodos();
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể cập nhật công việc');
+    }
+  }
+
   async function handleToggleDone(id: number, done: number) {
     try {
       await db.runAsync('UPDATE todos SET done = ? WHERE id = ?', [done ? 0 : 1, id]);
@@ -82,6 +103,12 @@ export default function TodoListScreen() {
                 <TouchableOpacity
                   style={styles.item}
                   onPress={() => handleToggleDone(item.id, item.done)}
+                  onLongPress={() => {
+                    setEditId(item.id);
+                    setEditTitle(item.title);
+                    setEditModalVisible(true);
+                    setEditError('');
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
@@ -115,6 +142,35 @@ export default function TodoListScreen() {
                     <Text style={styles.modalButtonText}>Lưu</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setModalVisible(false); setInputError(''); setNewTitle(''); }}>
+                    <Text style={styles.modalButtonText}>Hủy</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <Modal
+            visible={editModalVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setEditModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Sửa tiêu đề công việc</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tiêu đề mới..."
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  autoFocus
+                  placeholderTextColor="#a0aec0"
+                />
+                {editError ? <Text style={styles.inputError}>{editError}</Text> : null}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalButton} onPress={handleEditTodo}>
+                    <Text style={styles.modalButtonText}>Lưu</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setEditModalVisible(false); setEditError(''); setEditTitle(''); setEditId(null); }}>
                     <Text style={styles.modalButtonText}>Hủy</Text>
                   </TouchableOpacity>
                 </View>
