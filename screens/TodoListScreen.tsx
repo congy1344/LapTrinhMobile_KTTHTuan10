@@ -68,6 +68,7 @@ export default function TodoListScreen() {
       setEditModalVisible(false);
       setEditTitle('');
       setEditId(null);
+      Alert.alert('Thành công', 'Đã sửa tiêu đề công việc!');
       fetchTodos();
     } catch (err) {
       Alert.alert('Lỗi', 'Không thể cập nhật công việc');
@@ -81,6 +82,26 @@ export default function TodoListScreen() {
     } catch (err) {
       Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
     }
+  }
+
+  async function handleDeleteTodo(id: number) {
+    Alert.alert(
+      'Xác nhận',
+      'Bạn có chắc muốn xóa công việc này?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa', style: 'destructive', onPress: async () => {
+            try {
+              await db.runAsync('DELETE FROM todos WHERE id = ?', [id]);
+              fetchTodos();
+            } catch (err) {
+              Alert.alert('Lỗi', 'Không thể xóa công việc');
+            }
+          }
+        }
+      ]
+    );
   }
 
   return (
@@ -100,19 +121,24 @@ export default function TodoListScreen() {
               data={todos}
               keyExtractor={item => item.id.toString()}
               renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.item}
-                  onPress={() => handleToggleDone(item.id, item.done)}
-                  onLongPress={() => {
-                    setEditId(item.id);
-                    setEditTitle(item.title);
-                    setEditModalVisible(true);
-                    setEditError('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
-                </TouchableOpacity>
+                <View style={styles.itemRow}>
+                  <TouchableOpacity
+                    style={styles.item}
+                    onPress={() => handleToggleDone(item.id, item.done)}
+                    onLongPress={() => {
+                      setEditId(item.id);
+                      setEditTitle(item.title);
+                      setEditModalVisible(true);
+                      setEditError('');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTodo(item.id)}>
+                    <Text style={styles.deleteButtonText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             />
           )}
@@ -229,7 +255,12 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 18,
   },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   item: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
@@ -253,6 +284,18 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: '#a0aec0',
     fontStyle: 'italic',
+  },
+  deleteButton: {
+    marginLeft: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#e53e3e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 20,
   },
   emptyContainer: {
     flex: 1,
