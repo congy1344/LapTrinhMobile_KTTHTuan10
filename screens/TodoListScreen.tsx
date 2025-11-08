@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View, FlatList, StyleSheet } from 'react-native';
+import { Text, View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import db from '../db';
 
@@ -13,6 +13,9 @@ interface Todo {
 export default function TodoListScreen() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [inputError, setInputError] = useState('');
 
   useEffect(() => {
     fetchTodos();
@@ -28,6 +31,26 @@ export default function TodoListScreen() {
       setTodos([]);
     }
     setLoading(false);
+  }
+
+  async function handleAddTodo() {
+    if (!newTitle.trim()) {
+      setInputError('Tiêu đề không được để trống');
+      return;
+    }
+    setInputError('');
+    try {
+      const now = Date.now();
+      await db.runAsync(
+        'INSERT INTO todos (title, done, created_at) VALUES (?, ?, ?)',
+        [newTitle.trim(), 0, now]
+      );
+      setNewTitle('');
+      setModalVisible(false);
+      fetchTodos();
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể thêm công việc');
+    }
   }
 
   return (
@@ -54,6 +77,38 @@ export default function TodoListScreen() {
               )}
             />
           )}
+          <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+            <Text style={styles.fabText}>＋</Text>
+          </TouchableOpacity>
+          <Modal
+            visible={modalVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Thêm công việc mới</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tiêu đề..."
+                  value={newTitle}
+                  onChangeText={setNewTitle}
+                  autoFocus
+                  placeholderTextColor="#a0aec0"
+                />
+                {inputError ? <Text style={styles.inputError}>{inputError}</Text> : null}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalButton} onPress={handleAddTodo}>
+                    <Text style={styles.modalButtonText}>Lưu</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setModalVisible(false); setInputError(''); setNewTitle(''); }}>
+                    <Text style={styles.modalButtonText}>Hủy</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -77,6 +132,28 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     color: '#2d3748',
     textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 32,
+    right: 24,
+    backgroundColor: '#3182ce',
+    borderRadius: 32,
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 20,
+  },
+  fabText: {
+    color: '#fff',
+    fontSize: 40,
+    fontWeight: 'bold',
+    marginTop: -2,
   },
   loading: {
     textAlign: 'center',
@@ -119,5 +196,68 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 20,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+    alignItems: 'center',
+    transform: [{ scale: 1 }],
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 18,
+    textAlign: 'center',
+    color: '#3182ce',
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: '#3182ce',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 18,
+    marginBottom: 10,
+    width: '100%',
+    backgroundColor: '#f7f9fc',
+    color: '#222',
+  },
+  inputError: {
+    color: '#e53e3e',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontSize: 15,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    width: '100%',
+  },
+  modalButton: {
+    backgroundColor: '#3182ce',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    marginHorizontal: 6,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#a0aec0',
   },
 });
