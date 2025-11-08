@@ -1,12 +1,19 @@
 import React, { useEffect } from 'react';
 import { Text, View } from 'react-native';
-import { initDB } from './db';
+import { initDB, seedTodos } from './db';
 
 export default function App() {
   useEffect(() => {
-    initDB()
-      .then(() => console.log('Database initialized'))
-      .catch(err => console.error('DB init error', err));
+    async function setupDB() {
+      try {
+        await initDB();
+        await seedTodos();
+        console.log('Database initialized and seeded');
+      } catch (err) {
+        console.error('DB init/seed error', err);
+      }
+    }
+    setupDB();
   }, []);
 
   return (
