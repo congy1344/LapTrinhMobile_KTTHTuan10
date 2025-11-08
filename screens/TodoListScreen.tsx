@@ -1,18 +1,22 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Text, View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Text, View, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import db from '../db';
-
-interface Todo {
-  id: number;
-  title: string;
-  done: number;
-  created_at: number;
-}
+import useTodos from './useTodos';
 
 export default function TodoListScreen() {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    todos,
+    loading,
+    error,
+    syncLoading,
+    loadTodos,
+    addTodo,
+    editTodo,
+    toggleDone,
+    deleteTodo,
+    importFromAPI,
+  } = useTodos();
+
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [inputError, setInputError] = useState('');
@@ -21,112 +25,10 @@ export default function TodoListScreen() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editError, setEditError] = useState('');
   const [search, setSearch] = useState('');
-  const [syncLoading, setSyncLoading] = useState(false);
 
   useEffect(() => {
-    fetchTodos();
-  }, []);
-
-  async function fetchTodos() {
-    setLoading(true);
-    try {
-      const result = await db.getAllAsync('SELECT * FROM todos ORDER BY created_at DESC') as Todo[];
-      setTodos(result);
-    } catch (err) {
-      console.error('Fetch todos error', err);
-      setTodos([]);
-    }
-    setLoading(false);
-  }
-
-  async function handleAddTodo() {
-    if (!newTitle.trim()) {
-      setInputError('Tiêu đề không được để trống');
-      return;
-    }
-    setInputError('');
-    try {
-      const now = Date.now();
-      await db.runAsync(
-        'INSERT INTO todos (title, done, created_at) VALUES (?, ?, ?)',
-        [newTitle.trim(), 0, now]
-      );
-      setNewTitle('');
-      setModalVisible(false);
-      fetchTodos();
-    } catch (err) {
-      Alert.alert('Lỗi', 'Không thể thêm công việc');
-    }
-  }
-
-  async function handleEditTodo() {
-    if (!editTitle.trim()) {
-      setEditError('Tiêu đề không được để trống');
-      return;
-    }
-    setEditError('');
-    try {
-      await db.runAsync('UPDATE todos SET title = ? WHERE id = ?', [editTitle.trim(), editId]);
-      setEditModalVisible(false);
-      setEditTitle('');
-      setEditId(null);
-      Alert.alert('Thành công', 'Đã sửa tiêu đề công việc!');
-      fetchTodos();
-    } catch (err) {
-      Alert.alert('Lỗi', 'Không thể cập nhật công việc');
-    }
-  }
-
-  async function handleToggleDone(id: number, done: number) {
-    try {
-      await db.runAsync('UPDATE todos SET done = ? WHERE id = ?', [done ? 0 : 1, id]);
-      fetchTodos();
-    } catch (err) {
-      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
-    }
-  }
-
-  async function handleDeleteTodo(id: number) {
-    Alert.alert(
-      'Xác nhận',
-      'Bạn có chắc muốn xóa công việc này?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa', style: 'destructive', onPress: async () => {
-            try {
-              await db.runAsync('DELETE FROM todos WHERE id = ?', [id]);
-              fetchTodos();
-            } catch (err) {
-              Alert.alert('Lỗi', 'Không thể xóa công việc');
-            }
-          }
-        }
-      ]
-    );
-  }
-
-  async function handleSyncAPI() {
-    setSyncLoading(true);
-    try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=10');
-      if (!response.ok) throw new Error('Fetch thất bại');
-      const apiTodos = await response.json();
-      const existingTitles = new Set(todos.map(t => t.title));
-      for (const todo of apiTodos) {
-        if (existingTitles.has(todo.title)) continue;
-        await db.runAsync(
-          'INSERT INTO todos (title, done, created_at) VALUES (?, ?, ?)',
-          [todo.title, todo.completed ? 1 : 0, Date.now()]
-        );
-      }
-      await fetchTodos();
-      Alert.alert('Thành công', 'Đã đồng bộ công việc từ API!');
-    } catch (err) {
-      Alert.alert('Lỗi', 'Không thể đồng bộ từ API');
-    }
-    setSyncLoading(false);
-  }
+    loadTodos();
+  }, [loadTodos]);
 
   const filteredTodos = useMemo(() => {
     if (!search.trim()) return todos;
@@ -134,12 +36,67 @@ export default function TodoListScreen() {
     return todos.filter(todo => todo.title.toLowerCase().includes(lower));
   }, [search, todos]);
 
+  const handleAdd = useCallback(async () => {
+    if (!newTitle.trim()) {
+      setInputError('Tiêu đề không được để trống');
+      return;
+    }
+    setInputError('');
+    try {
+      await addTodo(newTitle);
+      setNewTitle('');
+      setModalVisible(false);
+    } catch (err: any) {
+      setInputError(err.message || 'Lỗi thêm công việc');
+    }
+  }, [newTitle, addTodo]);
+
+  const handleEdit = useCallback(async () => {
+    if (!editTitle.trim()) {
+      setEditError('Tiêu đề không được để trống');
+      return;
+    }
+    setEditError('');
+    try {
+      await editTodo(editId!, editTitle);
+      setEditModalVisible(false);
+      setEditTitle('');
+      setEditId(null);
+      Alert.alert('Thành công', 'Đã sửa tiêu đề công việc!');
+    } catch (err: any) {
+      setEditError(err.message || 'Lỗi cập nhật công việc');
+    }
+  }, [editTitle, editId, editTodo]);
+
+  const handleToggle = useCallback(async (id: number, done: number) => {
+    await toggleDone(id, done);
+  }, [toggleDone]);
+
+  const handleDelete = useCallback((id: number) => {
+    Alert.alert(
+      'Xác nhận',
+      'Bạn có chắc muốn xóa công việc này?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa', style: 'destructive', onPress: async () => {
+            await deleteTodo(id);
+          }
+        }
+      ]
+    );
+  }, [deleteTodo]);
+
+  const handleImport = useCallback(async () => {
+    await importFromAPI();
+  }, [importFromAPI]);
+
   const renderItem = useCallback(
     ({ item }) => (
       <View style={styles.itemRow}>
         <TouchableOpacity
           style={styles.item}
-          onPress={() => handleToggleDone(item.id, item.done)}
+          onPress={() => handleToggle(item.id, item.done)}
           onLongPress={() => {
             setEditId(item.id);
             setEditTitle(item.title);
@@ -150,12 +107,12 @@ export default function TodoListScreen() {
         >
           <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTodo(item.id)}>
+        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.id)}>
           <Text style={styles.deleteButtonText}>🗑️</Text>
         </TouchableOpacity>
       </View>
     ),
-    [handleToggleDone, handleDeleteTodo]
+    [handleToggle, handleDelete]
   );
 
   return (
@@ -163,7 +120,7 @@ export default function TodoListScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <Text style={styles.header}>📝 Danh sách công việc</Text>
-          <TouchableOpacity style={styles.syncButton} onPress={handleSyncAPI} disabled={syncLoading}>
+          <TouchableOpacity style={styles.syncButton} onPress={handleImport} disabled={syncLoading}>
             <Text style={styles.syncButtonText}>{syncLoading ? 'Đang đồng bộ...' : 'Đồng bộ API'}</Text>
           </TouchableOpacity>
           <TextInput
@@ -172,22 +129,27 @@ export default function TodoListScreen() {
             value={search}
             onChangeText={setSearch}
             placeholderTextColor="#a0aec0"
+            editable={!loading}
           />
           {loading ? (
-            <Text style={styles.loading}>Đang tải...</Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>⏳</Text>
+              <Text style={styles.empty}>Đang tải dữ liệu...</Text>
+            </View>
           ) : filteredTodos.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📭</Text>
-              <Text style={styles.empty}>Chưa có việc nào</Text>
+              <Text style={styles.emptyIcon}>🌱</Text>
+              <Text style={styles.empty}>Chưa có việc nào. Hãy thêm mới hoặc đồng bộ!</Text>
             </View>
           ) : (
             <FlatList
               data={filteredTodos}
               keyExtractor={item => item.id.toString()}
               renderItem={renderItem}
+              refreshControl={<RefreshControl refreshing={loading} onRefresh={loadTodos} />}
             />
           )}
-          <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)} disabled={loading || syncLoading}>
             <Text style={styles.fabText}>＋</Text>
           </TouchableOpacity>
           <Modal
@@ -206,10 +168,11 @@ export default function TodoListScreen() {
                   onChangeText={setNewTitle}
                   autoFocus
                   placeholderTextColor="#a0aec0"
+                  editable={!loading}
                 />
                 {inputError ? <Text style={styles.inputError}>{inputError}</Text> : null}
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={styles.modalButton} onPress={handleAddTodo}>
+                  <TouchableOpacity style={styles.modalButton} onPress={handleAdd} disabled={loading}>
                     <Text style={styles.modalButtonText}>Lưu</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setModalVisible(false); setInputError(''); setNewTitle(''); }}>
@@ -235,10 +198,11 @@ export default function TodoListScreen() {
                   onChangeText={setEditTitle}
                   autoFocus
                   placeholderTextColor="#a0aec0"
+                  editable={!loading}
                 />
                 {editError ? <Text style={styles.inputError}>{editError}</Text> : null}
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={styles.modalButton} onPress={handleEditTodo}>
+                  <TouchableOpacity style={styles.modalButton} onPress={handleEdit} disabled={loading}>
                     <Text style={styles.modalButtonText}>Lưu</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => { setEditModalVisible(false); setEditError(''); setEditTitle(''); setEditId(null); }}>
