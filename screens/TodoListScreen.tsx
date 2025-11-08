@@ -21,6 +21,7 @@ export default function TodoListScreen() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editError, setEditError] = useState('');
   const [search, setSearch] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
 
   useEffect(() => {
     fetchTodos();
@@ -105,6 +106,28 @@ export default function TodoListScreen() {
     );
   }
 
+  async function handleSyncAPI() {
+    setSyncLoading(true);
+    try {
+      const response = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=10');
+      if (!response.ok) throw new Error('Fetch thất bại');
+      const apiTodos = await response.json();
+      const existingTitles = new Set(todos.map(t => t.title));
+      for (const todo of apiTodos) {
+        if (existingTitles.has(todo.title)) continue;
+        await db.runAsync(
+          'INSERT INTO todos (title, done, created_at) VALUES (?, ?, ?)',
+          [todo.title, todo.completed ? 1 : 0, Date.now()]
+        );
+      }
+      await fetchTodos();
+      Alert.alert('Thành công', 'Đã đồng bộ công việc từ API!');
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể đồng bộ từ API');
+    }
+    setSyncLoading(false);
+  }
+
   const filteredTodos = useMemo(() => {
     if (!search.trim()) return todos;
     const lower = search.trim().toLowerCase();
@@ -140,6 +163,9 @@ export default function TodoListScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <Text style={styles.header}>📝 Danh sách công việc</Text>
+          <TouchableOpacity style={styles.syncButton} onPress={handleSyncAPI} disabled={syncLoading}>
+            <Text style={styles.syncButtonText}>{syncLoading ? 'Đang đồng bộ...' : 'Đồng bộ API'}</Text>
+          </TouchableOpacity>
           <TextInput
             style={styles.searchInput}
             placeholder="Tìm kiếm..."
@@ -404,5 +430,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#fff',
     color: '#222',
+  },
+  syncButton: {
+    backgroundColor: '#38a169',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    alignSelf: 'center',
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
