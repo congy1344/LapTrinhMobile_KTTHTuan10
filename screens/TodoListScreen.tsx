@@ -53,6 +53,15 @@ export default function TodoListScreen() {
     }
   }
 
+  async function handleToggleDone(id: number, done: number) {
+    try {
+      await db.runAsync('UPDATE todos SET done = ? WHERE id = ?', [done ? 0 : 1, id]);
+      fetchTodos();
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+    }
+  }
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
@@ -70,10 +79,13 @@ export default function TodoListScreen() {
               data={todos}
               keyExtractor={item => item.id.toString()}
               renderItem={({ item }) => (
-                <View style={styles.item}>
-                  <Text style={styles.itemIcon}>✅</Text>
-                  <Text style={styles.itemText}>{item.title}</Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.item}
+                  onPress={() => handleToggleDone(item.id, item.done)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.itemText, item.done ? styles.itemTextDone : null]}>{item.title}</Text>
+                </TouchableOpacity>
               )}
             />
           )}
@@ -180,6 +192,11 @@ const styles = StyleSheet.create({
   itemText: {
     fontSize: 18,
     color: '#222',
+  },
+  itemTextDone: {
+    textDecorationLine: 'line-through',
+    color: '#a0aec0',
+    fontStyle: 'italic',
   },
   emptyContainer: {
     flex: 1,
